@@ -34,40 +34,42 @@ const MinecraftPlayer = ({ skinTexture, onPartClick }: MinecraftPlayerProps) => 
   });
 
   return (
-    <group ref={groupRef} position={[0, 0, 0]}>
-      <mesh position={[0, 1.5, 0]} onClick={(e) => onPartClick(e, 'head')}>
-        <boxGeometry args={[0.8, 0.8, 0.8]} />
-        <meshStandardMaterial map={skinTexture} />
-      </mesh>
+    <>
+      <group ref={groupRef} position={[0, 0, 0]}>
+        <mesh position={[0, 1.5, 0]} onClick={(e) => onPartClick(e, 'head')}>
+          <boxGeometry args={[0.8, 0.8, 0.8]} />
+          <meshStandardMaterial map={skinTexture} />
+        </mesh>
 
-      <mesh position={[0, 0.5, 0]} onClick={(e) => onPartClick(e, 'body')}>
-        <boxGeometry args={[0.8, 1.2, 0.4]} />
-        <meshStandardMaterial map={skinTexture} />
-      </mesh>
+        <mesh position={[0, 0.5, 0]} onClick={(e) => onPartClick(e, 'body')}>
+          <boxGeometry args={[0.8, 1.2, 0.4]} />
+          <meshStandardMaterial map={skinTexture} />
+        </mesh>
 
-      <mesh position={[-0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'leftArm')}>
-        <boxGeometry args={[0.4, 1.2, 0.4]} />
-        <meshStandardMaterial map={skinTexture} />
-      </mesh>
+        <mesh position={[-0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'leftArm')}>
+          <boxGeometry args={[0.4, 1.2, 0.4]} />
+          <meshStandardMaterial map={skinTexture} />
+        </mesh>
 
-      <mesh position={[0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'rightArm')}>
-        <boxGeometry args={[0.4, 1.2, 0.4]} />
-        <meshStandardMaterial map={skinTexture} />
-      </mesh>
+        <mesh position={[0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'rightArm')}>
+          <boxGeometry args={[0.4, 1.2, 0.4]} />
+          <meshStandardMaterial map={skinTexture} />
+        </mesh>
 
-      <mesh position={[-0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'leftLeg')}>
-        <boxGeometry args={[0.4, 1.2, 0.4]} />
-        <meshStandardMaterial map={skinTexture} />
-      </mesh>
+        <mesh position={[-0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'leftLeg')}>
+          <boxGeometry args={[0.4, 1.2, 0.4]} />
+          <meshStandardMaterial map={skinTexture} />
+        </mesh>
 
-      <mesh position={[0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'rightLeg')}>
-        <boxGeometry args={[0.4, 1.2, 0.4]} />
-        <meshStandardMaterial map={skinTexture} />
-      </mesh>
-
+        <mesh position={[0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'rightLeg')}>
+          <boxGeometry args={[0.4, 1.2, 0.4]} />
+          <meshStandardMaterial map={skinTexture} />
+        </mesh>
+      </group>
+      
       <ambientLight intensity={0.6} />
       <directionalLight position={[5, 5, 5]} intensity={0.8} />
-    </group>
+    </>
   );
 };
 
