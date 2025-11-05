@@ -1,12 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Canvas, useFrame, ThreeEvent } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
-import * as THREE from 'three';
 
 const SKIN_WIDTH = 64;
 const SKIN_HEIGHT = 64;
@@ -19,80 +16,34 @@ const DEFAULT_PALETTE = [
   '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#800080'
 ];
 
-interface MinecraftPlayerProps {
-  skinTexture: THREE.Texture;
-  onPartClick: (event: ThreeEvent<MouseEvent>, partName: string) => void;
-}
-
-const MinecraftPlayer = ({ skinTexture, onPartClick }: MinecraftPlayerProps) => {
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.3) * 0.3;
-    }
-  });
-
-  return (
-    <>
-      <group ref={groupRef} position={[0, 0, 0]}>
-        <mesh position={[0, 1.5, 0]} onClick={(e) => onPartClick(e, 'head')}>
-          <boxGeometry args={[0.8, 0.8, 0.8]} />
-          <meshStandardMaterial map={skinTexture} />
-        </mesh>
-
-        <mesh position={[0, 0.5, 0]} onClick={(e) => onPartClick(e, 'body')}>
-          <boxGeometry args={[0.8, 1.2, 0.4]} />
-          <meshStandardMaterial map={skinTexture} />
-        </mesh>
-
-        <mesh position={[-0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'leftArm')}>
-          <boxGeometry args={[0.4, 1.2, 0.4]} />
-          <meshStandardMaterial map={skinTexture} />
-        </mesh>
-
-        <mesh position={[0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'rightArm')}>
-          <boxGeometry args={[0.4, 1.2, 0.4]} />
-          <meshStandardMaterial map={skinTexture} />
-        </mesh>
-
-        <mesh position={[-0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'leftLeg')}>
-          <boxGeometry args={[0.4, 1.2, 0.4]} />
-          <meshStandardMaterial map={skinTexture} />
-        </mesh>
-
-        <mesh position={[0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'rightLeg')}>
-          <boxGeometry args={[0.4, 1.2, 0.4]} />
-          <meshStandardMaterial map={skinTexture} />
-        </mesh>
-      </group>
-      
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-    </>
-  );
-};
-
 const Index = () => {
   const [currentColor, setCurrentColor] = useState('#8B4513');
   const [tool, setTool] = useState<'brush' | 'eraser' | 'fill' | 'eyedropper'>('brush');
   const [activeTab, setActiveTab] = useState('editor');
-  const [skinTexture, setSkinTexture] = useState<THREE.Texture | null>(null);
+  const [rotation, setRotation] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     initializeSkin();
   }, []);
 
+  useEffect(() => {
+    drawPreview();
+  }, [rotation]);
+
   const initializeSkin = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = SKIN_WIDTH;
-    canvas.height = SKIN_HEIGHT;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#C6C6C6';
     ctx.fillRect(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
 
@@ -105,19 +56,84 @@ const Index = () => {
     ctx.fillRect(20, 20, 8, 12);
     ctx.fillRect(28, 20, 8, 12);
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
-    texture.needsUpdate = true;
+    drawPreview();
+  };
 
-    setSkinTexture(texture);
+  const drawPreview = () => {
+    const previewCanvas = previewCanvasRef.current;
+    const skinCanvas = canvasRef.current;
+    if (!previewCanvas || !skinCanvas) return;
+
+    const ctx = previewCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = previewCanvas.width;
+    const height = previewCanvas.height;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, width, height);
+
+    const scale = 6;
+    const headSize = 8 * scale;
+    const bodyWidth = 8 * scale;
+    const bodyHeight = 12 * scale;
+    const armWidth = 4 * scale;
+    const armHeight = 12 * scale;
+    const legWidth = 4 * scale;
+    const legHeight = 12 * scale;
+
+    const angle = (rotation * Math.PI) / 180;
+    const perspective = Math.cos(angle);
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+
+    const drawCubeFace = (sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number) => {
+      ctx.drawImage(skinCanvas, sx, sy, sw, sh, dx, dy, dw, dh);
+    };
+
+    const headY = -bodyHeight - headSize / 2;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+    drawCubeFace(8, 8, 8, 8, -headSize / 2, headY, headSize, headSize);
+
+    const bodyY = -bodyHeight / 2;
+    drawCubeFace(20, 20, 8, 12, -bodyWidth / 2, bodyY, bodyWidth, bodyHeight);
+
+    const armOffset = bodyWidth / 2 + armWidth / 2 + 4;
+    const leftArmX = -armOffset;
+    const rightArmX = armOffset - armWidth;
+    drawCubeFace(44, 20, 4, 12, leftArmX, bodyY, armWidth, armHeight);
+    drawCubeFace(44, 20, 4, 12, rightArmX, bodyY, armWidth, armHeight);
+
+    const legY = bodyY + bodyHeight;
+    const leftLegX = -bodyWidth / 2;
+    const rightLegX = -legWidth;
+    drawCubeFace(4, 20, 4, 12, leftLegX, legY, legWidth, legHeight);
+    drawCubeFace(4, 20, 4, 12, rightLegX, legY, legWidth, legHeight);
+
+    ctx.restore();
+  };
+
+  const handlePreviewMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handlePreviewMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging) return;
     
-    if (canvasRef.current) {
-      const displayCtx = canvasRef.current.getContext('2d');
-      if (displayCtx) {
-        displayCtx.drawImage(canvas, 0, 0);
-      }
-    }
+    const deltaX = e.clientX - dragStart.x;
+    setRotation((prev) => (prev + deltaX) % 360);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handlePreviewMouseUp = () => {
+    setIsDragging(false);
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -151,7 +167,7 @@ const Index = () => {
       floodFill(ctx, x, y, currentColor);
     }
 
-    updateTexture(canvas);
+    drawPreview();
   };
 
   const floodFill = (ctx: CanvasRenderingContext2D, startX: number, startY: number, fillColor: string) => {
@@ -214,21 +230,6 @@ const Index = () => {
     ] : [0, 0, 0];
   };
 
-  const updateTexture = (canvas: HTMLCanvasElement) => {
-    if (!skinTexture) return;
-    
-    const newTexture = new THREE.CanvasTexture(canvas);
-    newTexture.magFilter = THREE.NearestFilter;
-    newTexture.minFilter = THREE.NearestFilter;
-    newTexture.needsUpdate = true;
-    setSkinTexture(newTexture);
-  };
-
-  const handlePartClick = (event: ThreeEvent<MouseEvent>, partName: string) => {
-    event.stopPropagation();
-    toast.info(`Клик на: ${partName}`);
-  };
-
   const handleLoadSkin = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -246,7 +247,7 @@ const Index = () => {
         ctx.clearRect(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
         ctx.drawImage(img, 0, 0, SKIN_WIDTH, SKIN_HEIGHT);
         
-        updateTexture(canvas);
+        drawPreview();
         toast.success('Скин загружен!');
       };
       img.src = event.target?.result as string;
@@ -295,18 +296,23 @@ const Index = () => {
             <div className="grid lg:grid-cols-2 gap-6">
               <Card className="p-6 shadow-xl backdrop-blur-sm bg-white/80">
                 <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-green-500 to-blue-500 bg-clip-text text-transparent">
-                  3D Модель
+                  3D Превью
                 </h2>
-                <div className="bg-gradient-to-b from-sky-400 to-green-400 rounded-xl overflow-hidden" style={{ height: '500px' }}>
-                  {skinTexture && (
-                    <Canvas camera={{ position: [0, 1.5, 4], fov: 50 }}>
-                      <MinecraftPlayer skinTexture={skinTexture} onPartClick={handlePartClick} />
-                      <OrbitControls enableZoom={true} enablePan={false} />
-                    </Canvas>
-                  )}
+                <div className="bg-gradient-to-b from-sky-400 to-green-400 rounded-xl overflow-hidden flex items-center justify-center" style={{ height: '500px' }}>
+                  <canvas
+                    ref={previewCanvasRef}
+                    width={400}
+                    height={500}
+                    onMouseDown={handlePreviewMouseDown}
+                    onMouseMove={handlePreviewMouseMove}
+                    onMouseUp={handlePreviewMouseUp}
+                    onMouseLeave={handlePreviewMouseUp}
+                    className="cursor-grab active:cursor-grabbing"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
                 </div>
                 <p className="text-sm text-muted-foreground mt-4 text-center">
-                  Вращайте модель мышкой • Кликайте на части тела
+                  Перетаскивайте мышкой для вращения модели
                 </p>
               </Card>
 
@@ -443,8 +449,7 @@ const Index = () => {
                     Вращение модели
                   </h3>
                   <p className="text-gray-700 leading-relaxed">
-                    Зажмите левую кнопку мыши на 3D модели и двигайте мышкой, чтобы вращать персонажа. 
-                    Используйте колесико для приближения и отдаления.
+                    Зажмите левую кнопку мыши на 3D превью и двигайте мышкой влево-вправо, чтобы вращать персонажа и посмотреть со всех сторон.
                   </p>
                 </div>
 
@@ -455,7 +460,7 @@ const Index = () => {
                   </h3>
                   <p className="text-gray-700 leading-relaxed">
                     Выберите инструмент и цвет. Кликайте по текстуре скина справа, чтобы рисовать пиксель за пикселем. 
-                    Изменения мгновенно отобразятся на 3D модели.
+                    Изменения мгновенно отобразятся на 3D превью слева.
                   </p>
                 </div>
 
