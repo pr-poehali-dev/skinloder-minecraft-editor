@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
+import { Canvas, useFrame, ThreeEvent } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
+import * as THREE from 'three';
 
-const SKIN_SIZE = 64;
-const CANVAS_SCALE = 8;
+const SKIN_WIDTH = 64;
+const SKIN_HEIGHT = 64;
 
 const DEFAULT_PALETTE = [
   '#8B4513', '#A0522D', '#D2691E', '#DEB887', '#F5DEB3',
@@ -16,92 +19,126 @@ const DEFAULT_PALETTE = [
   '#FFFF00', '#FF00FF', '#00FFFF', '#FFA500', '#800080'
 ];
 
+interface MinecraftPlayerProps {
+  skinTexture: THREE.Texture;
+  onPartClick: (event: ThreeEvent<MouseEvent>, partName: string) => void;
+}
+
+const MinecraftPlayer = ({ skinTexture, onPartClick }: MinecraftPlayerProps) => {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame((state) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.3) * 0.3;
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={[0, 0, 0]}>
+      <mesh position={[0, 1.5, 0]} onClick={(e) => onPartClick(e, 'head')}>
+        <boxGeometry args={[0.8, 0.8, 0.8]} />
+        <meshStandardMaterial map={skinTexture} />
+      </mesh>
+
+      <mesh position={[0, 0.5, 0]} onClick={(e) => onPartClick(e, 'body')}>
+        <boxGeometry args={[0.8, 1.2, 0.4]} />
+        <meshStandardMaterial map={skinTexture} />
+      </mesh>
+
+      <mesh position={[-0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'leftArm')}>
+        <boxGeometry args={[0.4, 1.2, 0.4]} />
+        <meshStandardMaterial map={skinTexture} />
+      </mesh>
+
+      <mesh position={[0.5, 0.5, 0]} onClick={(e) => onPartClick(e, 'rightArm')}>
+        <boxGeometry args={[0.4, 1.2, 0.4]} />
+        <meshStandardMaterial map={skinTexture} />
+      </mesh>
+
+      <mesh position={[-0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'leftLeg')}>
+        <boxGeometry args={[0.4, 1.2, 0.4]} />
+        <meshStandardMaterial map={skinTexture} />
+      </mesh>
+
+      <mesh position={[0.2, -0.6, 0]} onClick={(e) => onPartClick(e, 'rightLeg')}>
+        <boxGeometry args={[0.4, 1.2, 0.4]} />
+        <meshStandardMaterial map={skinTexture} />
+      </mesh>
+
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[5, 5, 5]} intensity={0.8} />
+    </group>
+  );
+};
+
 const Index = () => {
   const [currentColor, setCurrentColor] = useState('#8B4513');
   const [tool, setTool] = useState<'brush' | 'eraser' | 'fill' | 'eyedropper'>('brush');
-  const [rotation, setRotation] = useState(0);
   const [activeTab, setActiveTab] = useState('editor');
+  const [skinTexture, setSkinTexture] = useState<THREE.Texture | null>(null);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const skinDataRef = useRef<ImageData | null>(null);
 
   useEffect(() => {
-    initializeCanvas();
-    const interval = setInterval(() => {
-      setRotation(prev => (prev + 1) % 360);
-    }, 50);
-    return () => clearInterval(interval);
+    initializeSkin();
   }, []);
 
-  useEffect(() => {
-    drawPreview();
-  }, [rotation]);
-
-  const initializeCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
+  const initializeSkin = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = SKIN_WIDTH;
+    canvas.height = SKIN_HEIGHT;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#C6C6C6';
-    ctx.fillRect(0, 0, SKIN_SIZE, SKIN_SIZE);
+    ctx.fillRect(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
 
-    skinDataRef.current = ctx.getImageData(0, 0, SKIN_SIZE, SKIN_SIZE);
-    redrawCanvas();
-  };
-
-  const redrawCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !skinDataRef.current) return;
+    ctx.fillStyle = '#8B7355';
+    ctx.fillRect(8, 8, 8, 8);
+    ctx.fillRect(16, 8, 8, 8);
+    ctx.fillRect(8, 16, 16, 8);
     
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    ctx.fillStyle = '#4A90E2';
+    ctx.fillRect(20, 20, 8, 12);
+    ctx.fillRect(28, 20, 8, 12);
 
-    ctx.putImageData(skinDataRef.current, 0, 0);
-  };
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.needsUpdate = true;
 
-  const drawPreview = () => {
-    const canvas = previewCanvasRef.current;
-    const skinCanvas = canvasRef.current;
-    if (!canvas || !skinCanvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.rotate((rotation * Math.PI) / 180);
+    setSkinTexture(texture);
     
-    const scale = 4;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(skinCanvas, -32 * scale / 2, -32 * scale / 2, 32 * scale, 32 * scale);
-    
-    ctx.restore();
+    if (canvasRef.current) {
+      const displayCtx = canvasRef.current.getContext('2d');
+      if (displayCtx) {
+        displayCtx.drawImage(canvas, 0, 0);
+      }
+    }
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas || !skinDataRef.current) return;
+    if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / CANVAS_SCALE);
-    const y = Math.floor((e.clientY - rect.top) / CANVAS_SCALE);
+    const scaleX = SKIN_WIDTH / rect.width;
+    const scaleY = SKIN_HEIGHT / rect.height;
+    
+    const x = Math.floor((e.clientX - rect.left) * scaleX);
+    const y = Math.floor((e.clientY - rect.top) * scaleY);
 
-    if (x < 0 || x >= SKIN_SIZE || y < 0 || y >= SKIN_SIZE) return;
+    if (x < 0 || x >= SKIN_WIDTH || y < 0 || y >= SKIN_HEIGHT) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     if (tool === 'brush') {
-      drawPixel(ctx, x, y, currentColor);
+      ctx.fillStyle = currentColor;
+      ctx.fillRect(x, y, 1, 1);
     } else if (tool === 'eraser') {
-      drawPixel(ctx, x, y, 'rgba(0,0,0,0)');
+      ctx.clearRect(x, y, 1, 1);
     } else if (tool === 'eyedropper') {
       const imageData = ctx.getImageData(x, y, 1, 1);
       const [r, g, b] = imageData.data;
@@ -112,17 +149,11 @@ const Index = () => {
       floodFill(ctx, x, y, currentColor);
     }
 
-    skinDataRef.current = ctx.getImageData(0, 0, SKIN_SIZE, SKIN_SIZE);
-    drawPreview();
-  };
-
-  const drawPixel = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, 1, 1);
+    updateTexture(canvas);
   };
 
   const floodFill = (ctx: CanvasRenderingContext2D, startX: number, startY: number, fillColor: string) => {
-    const imageData = ctx.getImageData(0, 0, SKIN_SIZE, SKIN_SIZE);
+    const imageData = ctx.getImageData(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
     const targetColor = getPixelColor(imageData, startX, startY);
     const fillColorRgb = hexToRgb(fillColor);
     
@@ -136,7 +167,7 @@ const Index = () => {
       const key = `${x},${y}`;
       
       if (visited.has(key)) continue;
-      if (x < 0 || x >= SKIN_SIZE || y < 0 || y >= SKIN_SIZE) continue;
+      if (x < 0 || x >= SKIN_WIDTH || y < 0 || y >= SKIN_HEIGHT) continue;
       
       const currentColor = getPixelColor(imageData, x, y);
       if (!colorsMatch(currentColor, targetColor)) continue;
@@ -151,7 +182,7 @@ const Index = () => {
   };
 
   const getPixelColor = (imageData: ImageData, x: number, y: number) => {
-    const index = (y * SKIN_SIZE + x) * 4;
+    const index = (y * SKIN_WIDTH + x) * 4;
     return [
       imageData.data[index],
       imageData.data[index + 1],
@@ -161,7 +192,7 @@ const Index = () => {
   };
 
   const setPixelColor = (imageData: ImageData, x: number, y: number, color: number[]) => {
-    const index = (y * SKIN_SIZE + x) * 4;
+    const index = (y * SKIN_WIDTH + x) * 4;
     imageData.data[index] = color[0];
     imageData.data[index + 1] = color[1];
     imageData.data[index + 2] = color[2];
@@ -181,6 +212,21 @@ const Index = () => {
     ] : [0, 0, 0];
   };
 
+  const updateTexture = (canvas: HTMLCanvasElement) => {
+    if (!skinTexture) return;
+    
+    const newTexture = new THREE.CanvasTexture(canvas);
+    newTexture.magFilter = THREE.NearestFilter;
+    newTexture.minFilter = THREE.NearestFilter;
+    newTexture.needsUpdate = true;
+    setSkinTexture(newTexture);
+  };
+
+  const handlePartClick = (event: ThreeEvent<MouseEvent>, partName: string) => {
+    event.stopPropagation();
+    toast.info(`Клик на: ${partName}`);
+  };
+
   const handleLoadSkin = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -195,12 +241,11 @@ const Index = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        ctx.clearRect(0, 0, SKIN_SIZE, SKIN_SIZE);
-        ctx.drawImage(img, 0, 0, SKIN_SIZE, SKIN_SIZE);
-        skinDataRef.current = ctx.getImageData(0, 0, SKIN_SIZE, SKIN_SIZE);
+        ctx.clearRect(0, 0, SKIN_WIDTH, SKIN_HEIGHT);
+        ctx.drawImage(img, 0, 0, SKIN_WIDTH, SKIN_HEIGHT);
         
+        updateTexture(canvas);
         toast.success('Скин загружен!');
-        drawPreview();
       };
       img.src = event.target?.result as string;
     };
@@ -224,123 +269,125 @@ const Index = () => {
   };
 
   const handleClearCanvas = () => {
-    initializeCanvas();
+    initializeSkin();
     toast.success('Холст очищен!');
   };
 
   return (
-    <div className="min-h-screen bg-background p-4" style={{ fontFamily: "'Press Start 2P', cursive" }}>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4">
       <div className="max-w-7xl mx-auto">
         <header className="text-center mb-8 pt-8">
-          <h1 className="text-4xl md:text-5xl text-primary mb-4 drop-shadow-[4px_4px_0_rgba(0,0,0,0.3)]">
+          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-green-500 via-blue-500 to-purple-600 bg-clip-text text-transparent mb-4">
             SkinLoder
           </h1>
-          <p className="text-sm text-muted-foreground">Редактор скинов Minecraft</p>
+          <p className="text-lg text-muted-foreground">Редактор скинов Minecraft</p>
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-8 h-12 bg-card border-4 border-border">
-            <TabsTrigger value="editor" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              Редактор
-            </TabsTrigger>
-            <TabsTrigger value="guide" className="text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              Инструкция
-            </TabsTrigger>
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-8">
+            <TabsTrigger value="editor">Редактор</TabsTrigger>
+            <TabsTrigger value="guide">Инструкция</TabsTrigger>
           </TabsList>
 
           <TabsContent value="editor">
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card className="p-6 border-4 border-border shadow-[8px_8px_0_rgba(0,0,0,0.2)]">
-                <h2 className="text-lg mb-4 text-primary">3D Превью</h2>
-                <div className="bg-gradient-to-b from-sky-400 to-green-400 p-8 rounded-none border-4 border-border">
+            <div className="grid lg:grid-cols-2 gap-6">
+              <Card className="p-6 shadow-xl backdrop-blur-sm bg-white/80">
+                <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-green-500 to-blue-500 bg-clip-text text-transparent">
+                  3D Модель
+                </h2>
+                <div className="bg-gradient-to-b from-sky-400 to-green-400 rounded-xl overflow-hidden" style={{ height: '500px' }}>
+                  {skinTexture && (
+                    <Canvas camera={{ position: [0, 1.5, 4], fov: 50 }}>
+                      <MinecraftPlayer skinTexture={skinTexture} onPartClick={handlePartClick} />
+                      <OrbitControls enableZoom={true} enablePan={false} />
+                    </Canvas>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mt-4 text-center">
+                  Вращайте модель мышкой • Кликайте на части тела
+                </p>
+              </Card>
+
+              <Card className="p-6 shadow-xl backdrop-blur-sm bg-white/80">
+                <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+                  Текстура скина
+                </h2>
+                
+                <div className="bg-gray-100 p-4 rounded-xl mb-6 border-2 border-gray-200">
                   <canvas
-                    ref={previewCanvasRef}
-                    width={256}
-                    height={256}
-                    className="w-full h-auto mx-auto"
+                    ref={canvasRef}
+                    width={SKIN_WIDTH}
+                    height={SKIN_HEIGHT}
+                    onClick={handleCanvasClick}
+                    className="w-full h-auto cursor-crosshair border-2 border-gray-300 rounded"
                     style={{ imageRendering: 'pixelated' }}
                   />
                 </div>
-              </Card>
 
-              <Card className="p-6 border-4 border-border shadow-[8px_8px_0_rgba(0,0,0,0.2)]">
-                <h2 className="text-lg mb-4 text-primary">Холст</h2>
-                <div className="bg-muted p-4 border-4 border-border mb-4">
-                  <canvas
-                    ref={canvasRef}
-                    width={SKIN_SIZE}
-                    height={SKIN_SIZE}
-                    onClick={handleCanvasClick}
-                    className="w-full h-auto cursor-crosshair border-2 border-border"
-                    style={{
-                      width: SKIN_SIZE * CANVAS_SCALE,
-                      height: SKIN_SIZE * CANVAS_SCALE,
-                      imageRendering: 'pixelated'
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div>
-                    <p className="text-xs mb-2 text-muted-foreground">Инструменты:</p>
+                    <p className="text-sm font-semibold mb-3 text-gray-700">Инструменты</p>
                     <div className="grid grid-cols-4 gap-2">
                       <Button
                         variant={tool === 'brush' ? 'default' : 'outline'}
-                        size="sm"
+                        size="lg"
                         onClick={() => setTool('brush')}
-                        className="border-2 border-border shadow-[4px_4px_0_rgba(0,0,0,0.2)] hover:shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                        className="transition-all hover:scale-105"
                       >
-                        <Icon name="Pencil" size={16} />
+                        <Icon name="Pencil" size={20} />
                       </Button>
                       <Button
                         variant={tool === 'eraser' ? 'default' : 'outline'}
-                        size="sm"
+                        size="lg"
                         onClick={() => setTool('eraser')}
-                        className="border-2 border-border shadow-[4px_4px_0_rgba(0,0,0,0.2)] hover:shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                        className="transition-all hover:scale-105"
                       >
-                        <Icon name="Eraser" size={16} />
+                        <Icon name="Eraser" size={20} />
                       </Button>
                       <Button
                         variant={tool === 'fill' ? 'default' : 'outline'}
-                        size="sm"
+                        size="lg"
                         onClick={() => setTool('fill')}
-                        className="border-2 border-border shadow-[4px_4px_0_rgba(0,0,0,0.2)] hover:shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                        className="transition-all hover:scale-105"
                       >
-                        <Icon name="PaintBucket" size={16} />
+                        <Icon name="PaintBucket" size={20} />
                       </Button>
                       <Button
                         variant={tool === 'eyedropper' ? 'default' : 'outline'}
-                        size="sm"
+                        size="lg"
                         onClick={() => setTool('eyedropper')}
-                        className="border-2 border-border shadow-[4px_4px_0_rgba(0,0,0,0.2)] hover:shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                        className="transition-all hover:scale-105"
                       >
-                        <Icon name="Pipette" size={16} />
+                        <Icon name="Pipette" size={20} />
                       </Button>
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-xs mb-2 text-muted-foreground">Палитра:</p>
-                    <div className="grid grid-cols-10 gap-1">
+                    <p className="text-sm font-semibold mb-3 text-gray-700">Палитра цветов</p>
+                    <div className="grid grid-cols-10 gap-2 mb-3">
                       {DEFAULT_PALETTE.map((color) => (
                         <button
                           key={color}
                           onClick={() => setCurrentColor(color)}
-                          className={`w-8 h-8 border-2 border-border shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:scale-110 transition-transform ${
-                            currentColor === color ? 'ring-4 ring-primary' : ''
+                          className={`w-8 h-8 rounded-lg border-2 transition-all hover:scale-110 ${
+                            currentColor === color ? 'ring-4 ring-blue-500 scale-110' : 'border-gray-300'
                           }`}
                           style={{ backgroundColor: color }}
                         />
                       ))}
                     </div>
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <input
                         type="color"
                         value={currentColor}
                         onChange={(e) => setCurrentColor(e.target.value)}
-                        className="w-12 h-12 border-2 border-border cursor-pointer"
+                        className="w-16 h-16 rounded-lg border-2 border-gray-300 cursor-pointer"
                       />
-                      <span className="text-xs text-muted-foreground">{currentColor}</span>
+                      <div>
+                        <p className="text-xs text-gray-500">Текущий цвет</p>
+                        <p className="font-mono text-sm font-bold">{currentColor}</p>
+                      </div>
                     </div>
                   </div>
 
@@ -355,28 +402,24 @@ const Index = () => {
                     <Button
                       onClick={() => fileInputRef.current?.click()}
                       variant="secondary"
-                      size="sm"
-                      className="border-2 border-border shadow-[4px_4px_0_rgba(0,0,0,0.2)] hover:shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-xs"
+                      className="flex-1"
                     >
-                      <Icon name="Upload" size={14} className="mr-1" />
+                      <Icon name="Upload" size={16} className="mr-2" />
                       Загрузить
                     </Button>
                     <Button
                       onClick={handleSaveSkin}
-                      variant="default"
-                      size="sm"
-                      className="border-2 border-border shadow-[4px_4px_0_rgba(0,0,0,0.2)] hover:shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-xs"
+                      className="flex-1 bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600"
                     >
-                      <Icon name="Download" size={14} className="mr-1" />
+                      <Icon name="Download" size={16} className="mr-2" />
                       Сохранить
                     </Button>
                     <Button
                       onClick={handleClearCanvas}
                       variant="destructive"
-                      size="sm"
-                      className="border-2 border-border shadow-[4px_4px_0_rgba(0,0,0,0.2)] hover:shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-xs"
+                      className="flex-1"
                     >
-                      <Icon name="Trash2" size={14} className="mr-1" />
+                      <Icon name="Trash2" size={16} className="mr-2" />
                       Очистить
                     </Button>
                   </div>
@@ -386,58 +429,64 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="guide">
-            <Card className="p-8 border-4 border-border shadow-[8px_8px_0_rgba(0,0,0,0.2)] max-w-3xl mx-auto">
-              <h2 className="text-2xl mb-6 text-primary">Как пользоваться</h2>
+            <Card className="p-8 shadow-xl backdrop-blur-sm bg-white/80 max-w-3xl mx-auto">
+              <h2 className="text-3xl font-bold mb-6 bg-gradient-to-r from-green-500 to-purple-500 bg-clip-text text-transparent">
+                Как пользоваться
+              </h2>
               
-              <div className="space-y-6 text-sm leading-relaxed">
-                <div className="bg-card p-4 border-2 border-border">
-                  <h3 className="text-lg mb-3 text-secondary flex items-center gap-2">
-                    <Icon name="Pencil" size={16} />
-                    Рисование
+              <div className="space-y-6">
+                <div className="bg-gradient-to-r from-green-50 to-blue-50 p-6 rounded-xl border-l-4 border-green-500">
+                  <h3 className="text-xl font-bold mb-3 flex items-center gap-3">
+                    <Icon name="MousePointer" size={24} className="text-green-500" />
+                    Вращение модели
                   </h3>
-                  <p className="text-muted-foreground">
-                    Выберите кисть и цвет из палитры. Кликайте по холсту, чтобы рисовать пиксель за пикселем. 
-                    Используйте заливку для быстрого закрашивания областей.
+                  <p className="text-gray-700 leading-relaxed">
+                    Зажмите левую кнопку мыши на 3D модели и двигайте мышкой, чтобы вращать персонажа. 
+                    Используйте колесико для приближения и отдаления.
                   </p>
                 </div>
 
-                <div className="bg-card p-4 border-2 border-border">
-                  <h3 className="text-lg mb-3 text-secondary flex items-center gap-2">
-                    <Icon name="Upload" size={16} />
-                    Загрузка скина
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-xl border-l-4 border-blue-500">
+                  <h3 className="text-xl font-bold mb-3 flex items-center gap-3">
+                    <Icon name="Pencil" size={24} className="text-blue-500" />
+                    Рисование текстуры
                   </h3>
-                  <p className="text-muted-foreground">
-                    Нажмите "Загрузить" и выберите PNG файл размером 64x64 пикселя. 
-                    Скин автоматически отобразится в редакторе.
+                  <p className="text-gray-700 leading-relaxed">
+                    Выберите инструмент и цвет. Кликайте по текстуре скина справа, чтобы рисовать пиксель за пикселем. 
+                    Изменения мгновенно отобразятся на 3D модели.
                   </p>
                 </div>
 
-                <div className="bg-card p-4 border-2 border-border">
-                  <h3 className="text-lg mb-3 text-secondary flex items-center gap-2">
-                    <Icon name="Download" size={16} />
-                    Сохранение
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl border-l-4 border-purple-500">
+                  <h3 className="text-xl font-bold mb-3 flex items-center gap-3">
+                    <Icon name="Upload" size={24} className="text-purple-500" />
+                    Загрузка и сохранение
                   </h3>
-                  <p className="text-muted-foreground">
-                    Когда скин готов, нажмите "Сохранить". Файл minecraft_skin.png сохранится на ваш компьютер. 
-                    Загрузите его в Minecraft через настройки профиля.
+                  <p className="text-gray-700 leading-relaxed">
+                    Загрузите существующий скин (PNG 64x64) или создайте новый. 
+                    Нажмите "Сохранить", чтобы скачать готовый файл для Minecraft.
                   </p>
                 </div>
 
-                <div className="bg-card p-4 border-2 border-border">
-                  <h3 className="text-lg mb-3 text-secondary flex items-center gap-2">
-                    <Icon name="Eye" size={16} />
-                    3D Превью
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl border-l-4 border-yellow-500">
+                  <h3 className="text-xl font-bold mb-3 flex items-center gap-3">
+                    <Icon name="Lightbulb" size={24} className="text-yellow-600" />
+                    Полезные советы
                   </h3>
-                  <p className="text-muted-foreground">
-                    Ваш скин отображается на вращающейся модели. Так вы видите, как он будет выглядеть в игре в реальном времени.
-                  </p>
-                </div>
-
-                <div className="bg-secondary/10 p-4 border-2 border-secondary mt-6">
-                  <p className="text-xs text-muted-foreground">
-                    💡 Совет: Minecraft использует формат 64x64 для классических скинов. 
-                    Убедитесь, что ваш файл соответствует этому размеру!
-                  </p>
+                  <ul className="space-y-2 text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 mt-1">•</span>
+                      <span>Используйте инструмент заливки для быстрого закрашивания областей</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 mt-1">•</span>
+                      <span>Пипетка помогает взять цвет из любой точки текстуры</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-yellow-600 mt-1">•</span>
+                      <span>Minecraft поддерживает формат 64x64 для классических скинов</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </Card>
